@@ -1,15 +1,16 @@
-/* Copyright (C) 2000 Analog Devices Inc., All Rights Reserved.
-** This contains Analog Devices Background IP and Development IP as
-** defined in the ADI/Intel Collaboration Agreement.
-*/
-/*
-** Registration of new Exception handling routines.
-*/
+//------------------------------------------------------------------------------
+//*    Copyright (C) 2000 Analog Devices Inc., All Rights Reserved.
+//*    This contains Analog Devices Background IP and Development IP as
+//*    defined in the ADI/Intel Collaboration Agreement.
+//*    
+//*    Registration of new Exception handling routines.
+//*
+//------------------------------------------------------------------------------
+//*    bfin-elf port by Harry E. Zhurov, Copyright (c) 2016
 
 #include <sys/excause.h>
 #include <ccblkfn.h>
 #include <exc.h>
-
 
 static __inline void
 disable_int(int which)

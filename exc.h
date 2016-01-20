@@ -1,15 +1,15 @@
-/*
- * Copyright (C) 2012 Analog Devices Inc.  All rights reserved.
- *
- * Licensed under the Clear BSD license.
- * Please see COPYING.LIBGLOSS for details.
- */
-
+//------------------------------------------------------------------------------
+//*    
+//*    Copyright (C) 2012 Analog Devices Inc.  All rights reserved.
+//*    
+//*    Licensed under the Clear BSD license.
+//*    Please see COPYING.LIBGLOSS for details.
+//*    
+//------------------------------------------------------------------------------
+//*    bfin-elf port by Harry E. Zhurov, Copyright (c) 2016
 
 #ifndef _EXCEPTION_H
 #define _EXCEPTION_H
-
-
 
 /*
 ** Definitions for user-friendly interrupt handling.
