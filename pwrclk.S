@@ -58,7 +58,7 @@ _pll_set_system_clocks:
     W[P0] = R2;
     SSYNC;
     RTS;
-    .size __pll_set_system_clocks, .-__pll_set_system_clocks
+    .size _pll_set_system_clocks, .-_pll_set_system_clocks
 
 // int pll_set_system_vco(int msel, int df, lockcnt)
     .align 2
@@ -100,7 +100,7 @@ L$wakeup:
 
 L$done:
     RTS;
-    .size __pll_set_system_vco, .-__pll_set_system_vco
+    .size _pll_set_system_vco, .-_pll_set_system_vco
 //#endif
 #endif /* ADSPLPBLACKFIN */
 //------------------------------------------------------------------------------
