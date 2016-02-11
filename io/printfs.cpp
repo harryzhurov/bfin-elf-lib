@@ -20,11 +20,12 @@
 
 #define _FLOAT_ROUND_ADJUST (double)5e-15
 
+//------------------------------------------------------------------------------
 int toupper(int c)
 {
     return (c < 'a' || c > 'z') ? c : c - 'a' + 'A';
 }
-
+//------------------------------------------------------------------------------
 char * strupr(char * string)
 {
     char * Result = string;
@@ -37,8 +38,7 @@ char * strupr(char * string)
     }
     return Result;
 }
-
-
+//------------------------------------------------------------------------------
 extern "C" int vsprintf(char *string, const char *format, va_list ap);
 extern "C" int sprintf(char *buffer, char const *format, ...)
 {
@@ -50,6 +50,7 @@ extern "C" int sprintf(char *buffer, char const *format, ...)
     return Len;
 }
 
+//------------------------------------------------------------------------------
 #ifdef  PRINTF_FLOAT
 extern int _floatp10(double *fnum, bool *negative, int prec);
 #endif
@@ -58,6 +59,7 @@ extern int _floatp10(double *fnum, bool *negative, int prec);
 extern "C" char *itoa(int num, char *str, int radix);
 extern "C" char *utoa(unsigned num, char *str, int radix);
 
+//------------------------------------------------------------------------------
 int vsprintf(char *string, char const *format, va_list ap)
 {
     char *output = string;
@@ -515,3 +517,5 @@ overflow:
     *output = '\0';
     return(output - string);
 }
+//------------------------------------------------------------------------------
+
