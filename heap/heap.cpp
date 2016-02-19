@@ -1,12 +1,58 @@
+//*-----------------------------------------------------------------------------
+//*
+//*     Heap Manager by Zltigo
+//* 
+//*     C++ design by Sergey A. Borshch
+//*
+//*     Description: Lightweight and fast free memory manager suitable 
+//*                  for embedded applications
+//* 
+//*     The code is distributed under the MIT license terms:
+//* 
+//*     Permission is hereby granted, free of charge, to any person
+//*     obtaining  a copy of this software and associated documentation
+//*     files (the "Software"), to deal in the Software without restriction,
+//*     including without limitation the rights to use, copy, modify, merge,
+//*     publish, distribute, sublicense, and/or sell copies of the Software,
+//*     and to permit persons to whom the Software is furnished to do so,
+//*     subject to the following conditions:
+//*
+//*     The above copyright notice and this permission notice shall be included
+//*     in all copies or substantial portions of the Software.
+//*
+//*     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+//*     EXPRESS  OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+//*     MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+//*     IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+//*     CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+//*     TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
+//*     THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//*
+//*-----------------------------------------------------------------------------
+
 //----------------------------------------------------------------------------
-// Работа с heap by zltigo
-// Структура heap:
-// {first_heap_mcb| memory part} {heap_mcb| memory part}...{heap_mcb| memory part}
-//  heap_mcb - описатель элемента памяти (Memory Comtrol Block)
-//            memory part - элемент памяти, который описывается соответствующим MCB
-//  Поле mcb.next описателя последнего MCB всегда указывает
-//  на первый MCB - циклическая структура.
-//  Указатель mcb.prev первого MCB указывает сам на себя.
+//  Terms
+//  ~~~~~
+//           
+//    Chunk: aggregate data structure consists of pair MCB:ASA (see below). 
+//           sizeof(Chunk) = sizeof(MCB) + sizeof(ASA)
+// 
+//    MCB:   Memory Control Block. Data structure for support of chunk 
+//           management operations.
+// 
+//    ASA:   Allocated Storage Area. Part of chunk used as properly aligned
+//           allocation item for application. Heap manager returns a pointer 
+//           to ASA when allocation takes place.
+// 
+// 
+// 
+//  Heap Structure
+//  ~~~~~~~~~~~~~~
+// 
+// {MCB_0:ASA_0}{MCB_1:ASA_1}...{MCB_N:ASA_N}
+// 
+//  mcb.next of the last MCB always points to the first MCB (circular pattern).
+//  mcb.prev of the first MCB points to itself.
 //----------------------------------------------------------------------------
 
 #include <stdlib.h>
@@ -46,26 +92,29 @@ extern "C" void * _sbrk(size_t n)
     return 0;
 }
 */
-//----------------------------------------------------------------------------
-// Инициализирует 'heap'.
-// *heap - Указатель на структуру описываюшую heap
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// Heap initialization
+//------------------------------------------------------------------------------
 heap::heap(uint32_t * pool, int size_items)
 : start((mcb *)pool)
 , freemem((mcb *)pool)
 {
     mcb *fmcb = start;
-    // Циклическая структура
+
+    // Circular pattern 
     fmcb->next = fmcb;
-    // Указатель на предыдущий MCB указывает сам на себя
+
+    // Pointer to previous MCB points to itself
     fmcb->prev = fmcb;
-    // Размер области памяти
+
+    // ASA size
     fmcb->ts.size = size_items * sizeof(*pool) - sizeof(mcb);
-    // Область памяти свободна
+    
+    // Set memory chunk free
     fmcb->ts.type = mcb::FREE;
 
-    // После инициализации heap представляет собой один свободный блок,
-    // который имеет размер size минус размер MCB.
+    // After initialization, heap is one free memory chunk with 
+    // ASA size = sizeof(heap) - sizeof(MCB)
 }
 
 /*
@@ -92,20 +141,22 @@ heap::mcb * heap::mcb::split(size_t size, heap::mcb * start)
     new_mcb->prev = this;
     new_mcb->ts.size = ( ts.size - size );
     new_mcb->ts.type = FREE;
+
     // Reinit current MCB
     next = new_mcb;
     ts.size = size;
-    ts.type = ALLOCATED;            // Mark block as used
-    // Если следующий MCB не последний, то mcb.prev следующего за ним
-    // должно теперь указывать на выделенный (xptr) MCB
+    ts.type = ALLOCATED;  // Mark block as used
+
+    // If the next MCB is not last then mcb.prev of the following MCB
+    // must point to allocated (xptf) MCB
     if( new_mcb->next != start )
         ( new_mcb->next )->prev = new_mcb;
     return new_mcb;
 }
 
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // malloc()
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 void * heap::malloc( size_t size )
 {
@@ -120,18 +171,19 @@ void * heap::malloc( size_t size )
     size_t free_cnt = 0;
 
     OS::TMutexLocker Lock(Mutex);
-    mcb *tptr = freemem;  // Поиск начинается с первого свободного
+    mcb *tptr = freemem;                                              // Scan begins from the first free MCB
     for(;;)
     {
         if( tptr->ts.type == mcb::FREE )
         {
             if( !USE_FULL_SCAN )
                 ++free_cnt;
-            if( tptr->ts.size >= size                                   // Требуемый и найденный размеры памяти равны
-                 && tptr->ts.size <= size + sizeof(mcb) + HEAP_ALIGN)   // или найденый больше, но в свободном месте
-                                                                        // не поместится новый блок хотя бы на один элемент
+            if( tptr->ts.size >= size                                 // Current free ASA size is equal to required size or
+                 && tptr->ts.size <= size + sizeof(mcb) + HEAP_ALIGN) // current free ASA size is greater then required size
+                                                                      // and the rest of memory (after splitting) of the current 
+                                                                      // chunk is large enough to allocate MCB + one allocation unit.
             {
-                tptr->ts.type = mcb::ALLOCATED;                         // Резервируем блок
+                tptr->ts.type = mcb::ALLOCATED;                       // Allocate the chunk
                 Allocated = tptr->pool();
                 if( USE_FULL_SCAN )
                     ++free_cnt;
@@ -143,13 +195,13 @@ void * heap::malloc( size_t size )
                 {
                     if( xptr == NULL )
                     {
-                        if( tptr->ts.size >= size)                      // Массив достаточен для размещения блока и его MCB?
-                            xptr = tptr;
+                        if( tptr->ts.size >= size)                    // Is memory chunk large enough to allocate MCB and 
+                            xptr = tptr;                              // required ammount of memory as ASA?
                         ++free_cnt;
                     }
                 }
-                else if( tptr->ts.size >= size )                        // Массив достаточен для размещения блока и его MCB?
-                {
+                else if( tptr->ts.size >= size )                      // Is memory chunk large enough to allocate MCB and   
+                {                                                     // required ammount of memory as ASA?                 
                     // Create new free MCB in parent's MCB tail
                     xptr = tptr->split(size, start);
                     Allocated = tptr->pool();
@@ -158,8 +210,8 @@ void * heap::malloc( size_t size )
             }
         }
 
-        tptr = tptr->next;                                              // Get ptr to next MCB
-        if( tptr == start )                                             // End of heap?
+        tptr = tptr->next;                                            // Get ptr to next MCB
+        if( tptr == start )                                           // End of heap?
         {
             if( USE_FULL_SCAN && xptr != 0 )
             {
@@ -171,15 +223,16 @@ void * heap::malloc( size_t size )
             }
             else
             {
-                Allocated = 0;                                          // No Memory
+                Allocated = 0;                                        // No Memory
                 break;
             }
         }
     }
 
-    if( ( free_cnt == 1 )&&( Allocated ) )          // Был занят первый свободный блок памяти?
-        freemem = tptr->next;                       // Указатель 'первый свободный' на следующий MCB
-                                                    // он или свободен или по крайней мере ближе к следующему свободному
+    if( ( free_cnt == 1 )&&( Allocated ) )          // Is the first free chunk has been allocated?
+        freemem = tptr->next;                       // Set 'first free chunk pointer' to the MCB of the next chunk
+                                                    // because either the chunk is free or, at least, it is closer to
+                                                    // the next free chunk
     return Allocated;
 }
 
@@ -187,23 +240,23 @@ void heap::mcb::merge_with_next(mcb * start)
 {
     // Check Next MCB
     mcb* other = next;
-    // Объединяем текущий и следующий MCB
+    // Join current and next chunks
     ts.size = ts.size + other->ts.size;
     other = next = other->next;
-    // Если следующий за объединенным MCB не последний, то меняем в нем mcb.prev на текущий
+    // After joining chunks, if the next chunk is not the last 
+    // then set the chunk's mcb.prev to current chunk
     if( other != start )
         other->prev = this;
 
 }
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // free()
-//----------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 void heap::free(void *pool )
 {
-    // В общем надо контролировать _все_ :( указатели на попадание в RAM, иначе будет exception :(
-    // Или использовать тупой перебор MCB и сравнивать с pool
-
-    // Проверка указателя на выровненность
+    // All pointer values should be checked to hit in RAM, otherwise an exception can occur
+    
+    // Check pointer alignment
     if( !pool || ((uintptr_t)pool & (HEAP_ALIGN - 1)))
         return;
 
@@ -211,8 +264,8 @@ void heap::free(void *pool )
     mcb *tptr = (mcb *)pool - 1;
 
     OS::TMutexLocker Lock(Mutex);
-    // Пока? только mem_ptr и то по одной границе.
-    // Перекрестная проверка для определения валидности
+    
+    // Crosscheck for valid values
     xptr = tptr->prev;
     if( (xptr != tptr && xptr->next != tptr) || pool < start )
         return;
@@ -221,24 +274,28 @@ void heap::free(void *pool )
     tptr->ts.type = mcb::FREE;          // Mark as "free"
     // Check Next MCB
     xptr = tptr->next;
-    // Если следующий MCB свободен и не первый в heap..
+    
+    // If the next chunk is free and the chunk is not the first
+    // in the heap
     if( xptr->ts.type == mcb::FREE && xptr != start )
     {
-        // Объединяем текущий (tptr) и следующий (xptr) MCB
+        // Join current (tptr) and next (xptr) chunks
         tptr->merge_with_next(start);
     }
     // Check previous MCB
     xptr = tptr->prev;
     // Если предыдущий MCB свободен и текущий не первый в heap...
+    // If previous chunk is free and current chunk is not
+    // first in the heap...
     if( xptr->ts.type == mcb::FREE && tptr != start )
     {
-        // Объединяем текущий (tptr) и предыдущий (xptr) MCB
+        // Join current (tptr) and previous (xptr) chunks
         xptr->merge_with_next(start);
-        tptr = xptr;            // tptr всегда на освободившийся блок.
+        tptr = xptr;            // tprt always point to freed chunk
     }
-    // Установка heap->freem для более быстрого перебора
-    if( tptr < freemem )        // Осводившийся блок находится перед считающимся первым свободным?
-        freemem = tptr;         // Новый указатель на первый 'free'
+    // Set heap->freem for more efficient search
+    if( tptr < freemem )        // Is freed chunk located berore the fisrt one that was considered free?
+        freemem = tptr;         // Update free chunk pointer
 }
 
 heap::summary heap::info()
@@ -263,3 +320,5 @@ heap::summary heap::info()
     while(pBlock != start);
     return Result;
 }
+//------------------------------------------------------------------------------
+
